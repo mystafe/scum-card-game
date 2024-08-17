@@ -4,10 +4,6 @@ class Card {
     this.value = value;
   }
 
-  getValue() {
-    return this.value;
-  }
-
   toString() {
     return `${this.value} of ${this.suit}`;
   }
@@ -36,14 +32,13 @@ class Deck {
   }
 
   deal(numPlayers) {
-    const hands = Array.from({ length: numPlayers }, () => []);
-    while (this.cards.length) {
-      hands.forEach(hand => {
-        if (this.cards.length) {
-          hand.push(this.cards.pop());
-        }
-      });
+    const cardsPerPlayer = Math.floor(this.cards.length / numPlayers);
+    const hands = [];
+
+    for (let i = 0; i < numPlayers; i++) {
+      hands.push(this.cards.slice(i * cardsPerPlayer, (i + 1) * cardsPerPlayer));
     }
+
     return hands;
   }
 }

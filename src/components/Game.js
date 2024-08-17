@@ -3,7 +3,7 @@ import Deck from './Deck';
 import Player from './Player';
 import { sortHand } from '../utils/sortHand';
 import { determinePlayableCards } from '../utils/determinePlayableCards';
-import { aiPlayCard } from '../utils/aiPlayCard';
+import { aiPlayCard, aiStrategy } from '../utils/aiPlayCard';
 
 const cardOrder = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
@@ -15,18 +15,23 @@ function Game() {
   const [round, setRound] = useState(1);
   const [playableCards, setPlayableCards] = useState([]);
   const [passCount, setPassCount] = useState(0);
-  const [gameOver, setGameOver] = useState(false);  // Oyunun bittiğini takip etmek için
+  const [gameOver, setGameOver] = useState(false);
+  const [totalScores, setTotalScores] = useState([0, 0, 0, 0, 0, 0]);
 
   useEffect(() => {
     if (players.length > 0 && currentPlayer !== 0) {
-      aiPlayCard(players[currentPlayer], pile, playCard, passTurn);
+      const aiMove = aiStrategy(players[currentPlayer], pile);
+      if (aiMove) {
+        playCard(players[currentPlayer].indexOf(aiMove));
+      } else {
+        passTurn();
+      }
     } else if (players.length > 0 && currentPlayer === 0) {
       setPlayableCards(determinePlayableCards(players[currentPlayer], pile));
     }
   }, [currentPlayer]);
 
   useEffect(() => {
-    // Oyunda sadece bir oyuncu kaldıysa oyunu bitir
     const remainingPlayers = players.filter(hand => hand.length > 0);
     if (remainingPlayers.length === 1) {
       setGameOver(true);
@@ -35,15 +40,15 @@ function Game() {
 
   const startGame = () => {
     const numPlayers = 4;
-    const hands = deck.deal(numPlayers);
-    const sortedHands = hands.map(hand => sortHand(hand));
-    setPlayers(sortedHands);
+    const hands = deck.deal(numPlayers);  // Artık deal metodunu kullanıyoruz
+    setPlayers(hands);
     setPile([]);
     setCurrentPlayer(0);
     setRound(1);
     setPassCount(0);
     setGameOver(false);
-    setPlayableCards(determinePlayableCards(sortedHands[0], []));
+    setTotalScores([0, 0, 0, 0, 0, 0]);
+    setPlayableCards(determinePlayableCards(hands[0], []));
   };
 
   const playCard = (cardIndex) => {
@@ -60,7 +65,9 @@ function Game() {
       setPassCount(0);
 
       if (newHand.length === 0) {
-        alert(`Player ${currentPlayer + 1} wins the round!`);
+        const rankings = updateRankings(players);
+        const roundScores = calculateScores(rankings);
+        setTotalScores(updateTotalScores(totalScores, roundScores));
         nextRound();
       } else {
         nextTurn();
@@ -87,6 +94,8 @@ function Game() {
   };
 
   const nextRound = () => {
+    const rankings = updateRankings(players);
+    swapCards(players, rankings);
     setRound(round + 1);
     setPile([]);
     setCurrentPlayer(0);
@@ -94,12 +103,61 @@ function Game() {
     setPlayableCards(determinePlayableCards(players[0], []));
   };
 
+  const updateRankings = (players) => {
+    const rankings = players.map((hand, index) => {
+      if (hand.length === 0) return 'President';
+      if (hand.length === players[players.length - 1].length) return 'Scum';
+      return `Player ${index + 1}`;
+    });
+
+    return rankings;
+  };
+
+  const swapCards = (players, rankings) => {
+    const presidentIndex = rankings.indexOf('President');
+    const scumIndex = rankings.indexOf('Scum');
+
+    if (presidentIndex === -1 || scumIndex === -1) {
+      // President veya Scum bulunamadıysa, işlemi atla
+      return;
+    }
+
+    let presidentHand = players[presidentIndex];
+    let scumHand = players[scumIndex];
+
+    const scumBestCards = scumHand.splice(scumHand.length - 2, 2);
+    const presidentWorstCards = presidentHand.splice(0, 2);
+
+    scumHand.push(...presidentWorstCards);
+    presidentHand.push(...scumBestCards);
+
+    players[presidentIndex] = sortHand(presidentHand);
+    players[scumIndex] = sortHand(scumHand);
+  };
+
+  const calculateScores = (rankings) => {
+    const scores = rankings.map(rank => {
+      switch (rank) {
+        case 'President': return 3;
+        case 'Vice President': return 2;
+        case 'Scum': return 0;
+        default: return 1;
+      }
+    });
+
+    return scores;
+  };
+
+  const updateTotalScores = (totalScores, roundScores) => {
+    return totalScores.map((score, index) => score + roundScores[index]);
+  };
+
   return (
     <div>
       <h1>Scum Card Game</h1>
       {!gameOver ? (
         <>
-          <button onClick={startGame}>Start Game</button>
+          <button onClick={startGame}>Start Game</button> {/* Start Game butonu */}
           <div>
             {players.map((hand, index) => (
               <Player
